@@ -5,6 +5,15 @@ import numpy as np
 # Sklearn preprocessing functionality
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 
+# Models from Sklearn
+from sklearn.linear_model import ElasticNet
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.svm import SVR
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, AdaBoostRegressor
+
+# Timing utilities
+from timeit import default_timer as timer
+
 
 def preprocess_data(df, test_days = 183, scale = True):
     """Preprocess a building energy dataframe for machine learning models. 
@@ -131,3 +140,75 @@ def preprocess_data(df, test_days = 183, scale = True):
     assert ~np.any(test.isnull()), "Testing Data Contains Missing Values!"
     
     return train, train_targets, test, test_targets
+
+
+def evaluate_models(df):
+    """Evaluate scikit-learn machine learning models
+    on a building energy dataset. More models can be added
+    to the function as required. 
+    
+    
+    Parameters
+    --------
+    df : dataframe
+        Building energy dataframe. Each row must have one observation
+        and the columns must contain the features. The dataframe
+        needs to have an "elec_cons" column to be used as targets. 
+    
+    Return
+    --------
+    results : dataframe, shape = [n_models, 4]
+        Modeling metrics. A dataframe with columns:
+        model, train_time, test_time, mape. Used for comparing
+        models for a given building dataset
+        
+    """
+    try:
+        # Preprocess the data for machine learning
+        train, train_targets, test, test_targets = preprocess_data(df, test_days = 183, scale = True)
+    except Exception as e:
+        print('Error processing data: ', e)
+        return
+        
+    # elasticnet
+    model = ElasticNet(alpha = 1.0, l1_ratio=0.5)
+    elasticnet_results = implement_model(model, train, train_targets, test, 
+                                         test_targets, model_name = 'elasticnet')
+    
+    # knn
+    model = KNeighborsRegressor()
+    knn_results = implement_model(model, train, train_targets, test, 
+                                  test_targets, model_name = 'knn')
+    
+    # svm
+    model = SVR()
+    svm_results = implement_model(model, train, train_targets, test, 
+                                   test_targets, model_name = 'svm')
+    
+    # rf
+    model = RandomForestRegressor(n_estimators = 100, n_jobs = -1)
+    rf_results = implement_model(model, train, train_targets, test, 
+                                  test_targets, model_name = 'rf')
+    
+    # et
+    model = ExtraTreesRegressor(n_estimators=100, n_jobs = -1)
+    et_results = implement_model(model, train, train_targets, test, 
+                                  test_targets, model_name = 'et')
+    
+    # adaboost
+    model = AdaBoostRegressor(n_estimators = 1000, learning_rate = 0.05, 
+                              loss = 'exponential')
+    adaboost_results = implement_model(model, train, train_targets, test, 
+                                       test_targets, model_name = 'adaboost')
+    
+    # Put the results into a single array (stack the rows)
+    results = np.vstack((elasticnet_results, knn_results, svm_results,
+                         rf_results, et_results, adaboost_results))
+    
+    # Convert the results to a dataframe
+    results = pd.DataFrame(results, columns = ['model', 'train_time', 'test_time', 'mape'])
+    
+    # Convert the numeric results to numbers
+    results.iloc[:, 1:] = results.iloc[:, 1:].astype(np.float32)
+    
+    return results
